@@ -1,0 +1,14 @@
+[tool.harness]
+reload_globs = ["src/**/*.py"]
+stop_timeout_seconds = 30
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 80
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["src"]

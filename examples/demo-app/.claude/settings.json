@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "uv run --quiet --project ../.. harness on-prompt"}]}
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "hooks": [{"type": "command", "command": "uv run --quiet --project ../.. harness on-edit"}]
+      }
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "uv run --quiet --project ../.. harness on-stop", "timeout": 180}]}
+    ]
+  }
+}
