@@ -1,6 +1,20 @@
 [tool.tether]
 reload_globs = ["src/**/*.py"]
 stop_timeout_seconds = 30
+layout = ["src/demo_app/*.py", "tests/*.py"]
+
+[tool.tether.slot_env]
+PORT = "{8765 + slot}"
+
+[[tool.tether.forbid]]
+pattern = "\\bprint\\("
+message = "use logging instead of print"
+paths = ["src/**/*.py"]
+
+[[tool.tether.imports]]
+source = "src/demo_app/pricing.py"
+forbid = ["demo_app.server", "http"]
+message = "pricing must stay free of web code"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

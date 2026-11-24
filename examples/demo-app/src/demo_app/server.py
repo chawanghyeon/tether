@@ -1,10 +1,12 @@
 import json
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from demo_app.pricing import price_with_vat
 
 HOST = "127.0.0.1"
-PORT = 8765
+DEFAULT_PORT = "8765"
+PORT = int(os.environ.get("PORT", DEFAULT_PORT))
 
 
 class PriceHandler(BaseHTTPRequestHandler):
