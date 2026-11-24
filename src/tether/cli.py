@@ -8,15 +8,11 @@ from pathlib import Path
 
 from tether.changes import changed_since, git_changed, snapshot_baseline
 from tether.checks import (
-    CheckResult,
     Deadline,
-    Status,
     failed,
     format_report,
     run_full_checks,
-    summarize,
 )
-from tether.claims import read_turn, unsupported_claims
 from tether.config import Config, ConfigError, find_root, load_config
 from tether.hooks import (
     BLOCK_EXIT_CODE,
@@ -33,24 +29,18 @@ from tether.state import (
     locked_turn,
     record_edit,
     reset_turn,
-    state_dir,
 )
 from tether.summary import (
-    one_line,
     render_markdown,
     summarize_changes,
-    write_summary,
 )
 from tether.supervisor import Supervisor, request_reload, should_reload
-from tether.tamper import find_tampering, turn_diff
+from tether.tamper import turn_diff
+from tether.verify import TurnSnapshot, verify_turn
 
 PROJECT_DIR_ENV = "CLAUDE_PROJECT_DIR"
 STOP_HOOK_TIMEOUT_SECONDS = 180
 EDIT_TOOLS_MATCHER = "Edit|MultiEdit|Write|NotebookEdit"
-CLAIMS_HEADING = "tether: unsupported claims"
-CLAIMS_ADVICE = "\nRun the check now, or correct your message."
-TAMPER_HEADING = "tether: edits to review"
-TAMPER_ADVICE = "\nUndo these, or say why each one is needed."
 
 
 def on_prompt(config: Config, now: float) -> Outcome:
@@ -76,47 +66,16 @@ def on_edit(config: Config, hook: HookInput) -> Outcome:
 
 def on_stop(config: Config, hook: HookInput, now: float) -> Outcome:
     turn = load_turn(config.root)
-    changed = changed_since(config.root, turn.started_at, turn.edited)
-    results = turn_results(
-        config, changed, Deadline.after(config.stop_timeout_seconds)
+    snapshot = TurnSnapshot.of(turn, hook.transcript_path)
+    report = verify_turn(
+        config, snapshot, Deadline.after(config.stop_timeout_seconds)
     )
-    failures = failed(results)
-    claims = _unsupported_claims(config, hook, turn.started_at, results)
-    diffs = turn_diff(config, turn.baseline, changed)
-    findings = [str(finding) for finding in find_tampering(config, diffs)]
-    blocking_findings = findings if config.tamper_blocks else []
-    if (failures or claims or blocking_findings) and (
-        turn.attempts < config.max_stop_attempts
-    ):
+    if report.problems(config) and turn.attempts < config.max_stop_attempts:
         with locked_turn(config.root) as state:
             state.attempts += 1
-        sections = []
-        if failures:
-            sections.append(format_report(results, config.max_report_chars))
-        if claims:
-            sections.append(_bullets(CLAIMS_HEADING, claims) + CLAIMS_ADVICE)
-        if blocking_findings:
-            sections.append(
-                _bullets(TAMPER_HEADING, blocking_findings) + TAMPER_ADVICE
-            )
-        return Outcome(BLOCK_EXIT_CODE, stderr="\n\n".join(sections))
-    messages = []
-    if failures:
-        messages.append(
-            f"tether: still failing after {turn.attempts} fix attempts. "
-            + summarize(results)
-        )
-    if claims:
-        messages.append(_bullets(CLAIMS_HEADING, claims))
-    if findings:
-        messages.append(_bullets(TAMPER_HEADING, findings))
-    if any(result.status is Status.TIMED_OUT for result in results):
-        messages.append("tether: checks timed out; run `tether check`")
-    if config.summary_on_stop and diffs:
-        changes = summarize_changes(config, turn.baseline, diffs)
-        write_summary(state_dir(config.root), changes)
-        messages.append(one_line(changes))
-    if should_reload(changed, config.reload_globs) and request_reload(
+        return Outcome(BLOCK_EXIT_CODE, stderr=report.agent_message(config))
+    messages = report.user_messages(turn.attempts)
+    if should_reload(report.changed, config.reload_globs) and request_reload(
         config.root
     ):
         messages.append("tether: server reloaded")
@@ -217,23 +176,6 @@ def _dispatch(args: argparse.Namespace) -> Outcome:
     if not server_command:
         return Outcome(2, stderr="tether serve: missing command after --")
     return Outcome(Supervisor(server_command, config.root).run())
-
-
-def _unsupported_claims(
-    config: Config,
-    hook: HookInput,
-    started_at: float,
-    results: Sequence[CheckResult],
-) -> list[str]:
-    if not config.verify_claims or hook.transcript_path is None:
-        return []
-    return unsupported_claims(
-        read_turn(hook.transcript_path, started_at), results
-    )
-
-
-def _bullets(heading: str, items: Sequence[str]) -> str:
-    return heading + "".join(f"\n- {item}" for item in items)
 
 
 def _strip_separator(command: list[str]) -> list[str]:
