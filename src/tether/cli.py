@@ -1,5 +1,4 @@
 import argparse
-import dataclasses
 import json
 import os
 import sys
@@ -26,6 +25,7 @@ from tether.hooks import (
     relative_to_root,
     system_message,
 )
+from tether.outcome import Outcome
 from tether.state import load_turn, locked_turn, record_edit, reset_turn
 from tether.supervisor import Supervisor, request_reload, should_reload
 
@@ -34,13 +34,6 @@ PYTHON_SUFFIX = ".py"
 PROJECT_DIR_ENV = "CLAUDE_PROJECT_DIR"
 STOP_HOOK_TIMEOUT_SECONDS = 180
 EDIT_TOOLS_MATCHER = "Edit|MultiEdit|Write|NotebookEdit"
-
-
-@dataclasses.dataclass(frozen=True)
-class Outcome:
-    exit_code: int = 0
-    stdout: str = ""
-    stderr: str = ""
 
 
 def on_prompt(config: Config, now: float) -> Outcome:
