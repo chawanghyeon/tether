@@ -7,12 +7,14 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 from types import FrameType
 
+from agent_harness.checks import resolve_executable
 from agent_harness.state import state_dir
 
 POLL_SECONDS = 0.1
 STOP_GRACE_SECONDS = 5.0
 SERVE_PID_FILE = "serve.pid"
 RELOAD_REQUEST_FILE = "reload.request"
+COMMAND_NOT_FOUND_EXIT_CODE = 127
 
 
 def should_reload(changed: Iterable[str], globs: Sequence[str]) -> bool:
@@ -51,6 +53,11 @@ class Supervisor:
         self._reported_exit = False
 
     def run(self) -> int:
+        executable = resolve_executable(self._root, self._command[0])
+        if executable is None:
+            self._log(f"{self._command[0]} not found")
+            return COMMAND_NOT_FOUND_EXIT_CODE
+        self._command[0] = executable
         pid_path = self._directory / SERVE_PID_FILE
         pid_path.write_text(str(os.getpid()))
         self._consume_reload_request()

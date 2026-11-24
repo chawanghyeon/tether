@@ -10,6 +10,8 @@ import pytest
 
 from agent_harness.state import state_dir
 from agent_harness.supervisor import (
+    COMMAND_NOT_FOUND_EXIT_CODE,
+    Supervisor,
     request_reload,
     serve_running,
     should_reload,
@@ -116,3 +118,36 @@ def test_sigterm_stops_child_and_cleans_up(
     assert process.wait(timeout=WAIT_SECONDS) == 0
     wait_until(lambda: not alive(child))
     assert not (state_dir(tmp_path) / "serve.pid").exists()
+
+
+def test_missing_command_exits_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = Supervisor(["no-such-server-xyz"], tmp_path).run()
+
+    assert code == COMMAND_NOT_FOUND_EXIT_CODE
+    assert "no-such-server-xyz not found" in capsys.readouterr().err
+    assert not (state_dir(tmp_path) / "serve.pid").exists()
+
+
+def test_command_resolves_from_project_venv(tmp_path: Path) -> None:
+    log = tmp_path / "starts.log"
+    script = tmp_path / ".venv" / "bin" / "fake-server"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import os, time\n"
+        f"open({str(log)!r}, 'a').write(f'{{os.getpid()}}\\n')\n"
+        "time.sleep(60)\n"
+    )
+    script.chmod(0o755)
+    process = subprocess.Popen(
+        [sys.executable, "-m", "agent_harness", "serve", "--", "fake-server"],
+        cwd=tmp_path,
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(tmp_path)},
+    )
+    try:
+        wait_until(lambda: len(started_pids(log)) == 1)
+    finally:
+        process.terminate()
+        process.wait(timeout=WAIT_SECONDS)
