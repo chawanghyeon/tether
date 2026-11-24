@@ -40,7 +40,7 @@ def load_config(root: Path) -> Config:
     table: dict[str, Any] = {}
     if pyproject.is_file():
         data = tomllib.loads(pyproject.read_text())
-        table = data.get("tool", {}).get("harness", {})
+        table = data.get("tool", {}).get("tether", {})
     return _build(root, table)
 
 
@@ -48,7 +48,7 @@ def _build(root: Path, table: dict[str, Any]) -> Config:
     fields = {f.name: f for f in dataclasses.fields(Config) if f.name != "root"}
     unknown = sorted(set(table) - set(fields))
     if unknown:
-        raise ConfigError(f"unknown [tool.harness] keys: {', '.join(unknown)}")
+        raise ConfigError(f"unknown [tool.tether] keys: {', '.join(unknown)}")
     values: dict[str, Any] = {
         name: tuple(value) if isinstance(value, list) else value
         for name, value in table.items()

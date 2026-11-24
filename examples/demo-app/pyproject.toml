@@ -1,4 +1,4 @@
-[tool.harness]
+[tool.tether]
 reload_globs = ["src/**/*.py"]
 stop_timeout_seconds = 30
 

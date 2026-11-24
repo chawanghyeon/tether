@@ -7,8 +7,8 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from agent_harness.changes import changed_since
-from agent_harness.checks import (
+from tether.changes import changed_since
+from tether.checks import (
     Deadline,
     Status,
     failed,
@@ -18,16 +18,16 @@ from agent_harness.checks import (
     run_turn_checks,
     summarize,
 )
-from agent_harness.config import Config, ConfigError, find_root, load_config
-from agent_harness.hooks import (
+from tether.config import Config, ConfigError, find_root, load_config
+from tether.hooks import (
     BLOCK_EXIT_CODE,
     HookInput,
     parse_hook_input,
     relative_to_root,
     system_message,
 )
-from agent_harness.state import load_turn, locked_turn, record_edit, reset_turn
-from agent_harness.supervisor import Supervisor, request_reload, should_reload
+from tether.state import load_turn, locked_turn, record_edit, reset_turn
+from tether.supervisor import Supervisor, request_reload, should_reload
 
 EDIT_LINT_TIMEOUT_SECONDS = 10.0
 PYTHON_SUFFIX = ".py"
@@ -88,15 +88,15 @@ def on_stop(config: Config, now: float) -> Outcome:
     messages = []
     if failures:
         messages.append(
-            f"harness: still failing after {turn.attempts} fix attempts. "
+            f"tether: still failing after {turn.attempts} fix attempts. "
             + summarize(results)
         )
     if any(result.status is Status.TIMED_OUT for result in results):
-        messages.append("harness: checks timed out; run `harness check`")
+        messages.append("tether: checks timed out; run `tether check`")
     if should_reload(changed, config.reload_globs) and request_reload(
         config.root
     ):
-        messages.append("harness: server reloaded")
+        messages.append("tether: server reloaded")
     reset_turn(config.root, now)
     stdout = system_message("\n".join(messages)) if messages else ""
     return Outcome(stdout=stdout)
@@ -115,13 +115,13 @@ def check(config: Config, full: bool) -> Outcome:
 
 def reload(config: Config) -> Outcome:
     if request_reload(config.root):
-        return Outcome(stdout="harness: reload requested")
-    return Outcome(1, stderr="harness: no `harness serve` running")
+        return Outcome(stdout="tether: reload requested")
+    return Outcome(1, stderr="tether: no `tether serve` running")
 
 
 def hooks_settings() -> str:
     def command(name: str, **extra: object) -> dict[str, object]:
-        return {"type": "command", "command": f"harness {name}", **extra}
+        return {"type": "command", "command": f"tether {name}", **extra}
 
     settings = {
         "hooks": {
@@ -149,7 +149,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         outcome = _dispatch(args)
     except ConfigError as error:
-        outcome = Outcome(1, stderr=f"harness: {error}")
+        outcome = Outcome(1, stderr=f"tether: {error}")
     if outcome.stdout:
         print(outcome.stdout)
     if outcome.stderr:
@@ -175,7 +175,7 @@ def _dispatch(args: argparse.Namespace) -> Outcome:
         return reload(config)
     server_command = _strip_separator(args.server_command)
     if not server_command:
-        return Outcome(2, stderr="harness serve: missing command after --")
+        return Outcome(2, stderr="tether serve: missing command after --")
     return Outcome(Supervisor(server_command, config.root).run())
 
 
@@ -188,7 +188,7 @@ def _project_dir(fallback: Path) -> Path:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="harness")
+    parser = argparse.ArgumentParser(prog="tether")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("on-prompt", help="hook: start a turn")
     commands.add_parser("on-edit", help="hook: record and lint an edit")

@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-STATE_DIR = ".harness"
+STATE_DIR = ".tether"
 TURN_FILE = "turn.json"
 LOCK_FILE = "turn.lock"
 

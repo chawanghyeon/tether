@@ -1,16 +1,16 @@
 {
   "hooks": {
     "UserPromptSubmit": [
-      {"hooks": [{"type": "command", "command": "uv run --quiet --project ../.. harness on-prompt"}]}
+      {"hooks": [{"type": "command", "command": "uv run --quiet --project ../.. tether on-prompt"}]}
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|MultiEdit|Write|NotebookEdit",
-        "hooks": [{"type": "command", "command": "uv run --quiet --project ../.. harness on-edit"}]
+        "hooks": [{"type": "command", "command": "uv run --quiet --project ../.. tether on-edit"}]
       }
     ],
     "Stop": [
-      {"hooks": [{"type": "command", "command": "uv run --quiet --project ../.. harness on-stop", "timeout": 180}]}
+      {"hooks": [{"type": "command", "command": "uv run --quiet --project ../.. tether on-stop", "timeout": 180}]}
     ]
   }
 }

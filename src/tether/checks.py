@@ -7,8 +7,8 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from agent_harness.config import Config
-from agent_harness.selection import select_tests, use_testmon
+from tether.config import Config
+from tether.selection import select_tests, use_testmon
 
 PYTEST_NO_TESTS_COLLECTED = 5
 PYTHON_SUFFIX = ".py"
@@ -157,7 +157,7 @@ def summarize(results: Sequence[CheckResult]) -> str:
         f"{result.name} {result.status} ({result.seconds:.1f}s)"
         for result in results
     ]
-    return "harness: " + (", ".join(parts) if parts else "nothing to check")
+    return "tether: " + (", ".join(parts) if parts else "nothing to check")
 
 
 def format_report(results: Sequence[CheckResult], max_chars: int) -> str:

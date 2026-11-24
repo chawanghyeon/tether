@@ -7,8 +7,8 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 from types import FrameType
 
-from agent_harness.checks import resolve_executable
-from agent_harness.state import state_dir
+from tether.checks import resolve_executable
+from tether.state import state_dir
 
 POLL_SECONDS = 0.1
 STOP_GRACE_SECONDS = 5.0
@@ -115,4 +115,4 @@ class Supervisor:
         self._stop_requested = True
 
     def _log(self, message: str) -> None:
-        print(f"harness serve: {message}", file=sys.stderr, flush=True)
+        print(f"tether serve: {message}", file=sys.stderr, flush=True)

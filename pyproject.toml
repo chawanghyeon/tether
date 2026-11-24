@@ -1,12 +1,12 @@
 [project]
-name = "agent-harness"
+name = "tether"
 version = "0.1.0"
 description = "Fast, turn-aware checks and reloads for coding agents."
 requires-python = ">=3.13"
 dependencies = []
 
 [project.scripts]
-harness = "agent_harness.cli:main"
+tether = "tether.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]

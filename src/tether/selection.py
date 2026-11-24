@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
-from agent_harness.config import Config
+from tether.config import Config
 
 PYTHON_SUFFIX = ".py"
 CONFTEST = "conftest.py"

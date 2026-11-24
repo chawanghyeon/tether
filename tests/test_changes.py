@@ -2,7 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from agent_harness.changes import changed_since, git_changed
+from tether.changes import changed_since, git_changed
 
 
 def git(root: Path, *args: str) -> None:

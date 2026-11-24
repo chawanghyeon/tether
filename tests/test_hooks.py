@@ -2,7 +2,7 @@ import io
 import json
 from pathlib import Path
 
-from agent_harness.hooks import parse_hook_input, relative_to_root
+from tether.hooks import parse_hook_input, relative_to_root
 
 
 def test_parses_post_tool_use(tmp_path: Path) -> None:

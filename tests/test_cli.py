@@ -7,21 +7,21 @@ from typing import Any
 
 import pytest
 
-from agent_harness.cli import (
+from tether.cli import (
     check,
     hooks_settings,
     on_edit,
     on_prompt,
     on_stop,
 )
-from agent_harness.config import Config
-from agent_harness.hooks import BLOCK_EXIT_CODE, HookInput
-from agent_harness.state import load_turn, record_edit
-from agent_harness.supervisor import RELOAD_REQUEST_FILE
+from tether.config import Config
+from tether.hooks import BLOCK_EXIT_CODE, HookInput
+from tether.state import load_turn, record_edit
+from tether.supervisor import RELOAD_REQUEST_FILE
 
 PASS = ("python", "-c", "import sys; sys.exit(0)")
 FAIL = ("python", "-c", "import sys; print('broken'); sys.exit(1)")
-SERVE_RUNNING = "agent_harness.supervisor.serve_running"
+SERVE_RUNNING = "tether.supervisor.serve_running"
 
 
 def write(root: Path, relative: str, text: str = "") -> Path:
@@ -141,7 +141,7 @@ def test_on_stop_requests_reload_when_server_runs(
 
     outcome = on_stop(make_config(project), now=1.0)
 
-    assert (project / ".harness" / RELOAD_REQUEST_FILE).exists()
+    assert (project / ".tether" / RELOAD_REQUEST_FILE).exists()
     assert "server reloaded" in json.loads(outcome.stdout)["systemMessage"]
 
 
@@ -153,7 +153,7 @@ def test_on_stop_skips_reload_for_test_only_changes(
 
     on_stop(make_config(project), now=1.0)
 
-    assert not (project / ".harness" / RELOAD_REQUEST_FILE).exists()
+    assert not (project / ".tether" / RELOAD_REQUEST_FILE).exists()
 
 
 def test_check_reports_failures(project: Path) -> None:
@@ -183,7 +183,7 @@ def test_hook_entrypoint_end_to_end(project: Path) -> None:
     )
 
     completed = subprocess.run(
-        [sys.executable, "-m", "agent_harness", "on-edit"],
+        [sys.executable, "-m", "tether", "on-edit"],
         input=payload,
         capture_output=True,
         text=True,

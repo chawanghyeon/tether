@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_harness.config import Config, ConfigError, find_root, load_config
+from tether.config import Config, ConfigError, find_root, load_config
 
 
 def write_pyproject(root: Path, body: str) -> None:
@@ -13,10 +13,10 @@ def test_defaults_without_pyproject(tmp_path: Path) -> None:
     assert load_config(tmp_path) == Config(root=tmp_path)
 
 
-def test_reads_harness_table(tmp_path: Path) -> None:
+def test_reads_tether_table(tmp_path: Path) -> None:
     write_pyproject(
         tmp_path,
-        '[tool.harness]\ntest_dirs = ["spec"]\nmax_stop_attempts = 5\n',
+        '[tool.tether]\ntest_dirs = ["spec"]\nmax_stop_attempts = 5\n',
     )
 
     config = load_config(tmp_path)
@@ -26,14 +26,14 @@ def test_reads_harness_table(tmp_path: Path) -> None:
 
 
 def test_rejects_unknown_keys(tmp_path: Path) -> None:
-    write_pyproject(tmp_path, "[tool.harness]\ntypo_key = 1\n")
+    write_pyproject(tmp_path, "[tool.tether]\ntypo_key = 1\n")
 
     with pytest.raises(ConfigError, match="typo_key"):
         load_config(tmp_path)
 
 
 def test_rejects_bad_selection(tmp_path: Path) -> None:
-    write_pyproject(tmp_path, '[tool.harness]\nselection = "magic"\n')
+    write_pyproject(tmp_path, '[tool.tether]\nselection = "magic"\n')
 
     with pytest.raises(ConfigError, match="selection"):
         load_config(tmp_path)

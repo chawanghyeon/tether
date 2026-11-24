@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent_harness.checks import (
+from tether.checks import (
     CheckResult,
     Deadline,
     Status,
@@ -9,7 +9,7 @@ from agent_harness.checks import (
     run_check,
     run_turn_checks,
 )
-from agent_harness.config import Config
+from tether.config import Config
 
 
 def python_exit(code: int, message: str = "") -> tuple[str, ...]:
@@ -118,6 +118,6 @@ def test_format_report_truncates_long_output() -> None:
 
     report = format_report(results, max_chars=10)
 
-    assert report.startswith("harness: lint passed (0.1s), tests failed")
+    assert report.startswith("tether: lint passed (0.1s), tests failed")
     assert "ignored" not in report
     assert report.endswith("... (truncated)\nxxxxxxxEND")

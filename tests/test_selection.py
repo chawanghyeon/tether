@@ -2,8 +2,8 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from agent_harness.config import Config
-from agent_harness.selection import is_test_file, select_tests, use_testmon
+from tether.config import Config
+from tether.selection import is_test_file, select_tests, use_testmon
 
 
 def touch(root: Path, *relative: str) -> None:

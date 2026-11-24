@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent_harness.state import (
+from tether.state import (
     TurnState,
     load_turn,
     locked_turn,

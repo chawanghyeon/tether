@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_harness.state import state_dir
-from agent_harness.supervisor import (
+from tether.state import state_dir
+from tether.supervisor import (
     COMMAND_NOT_FOUND_EXIT_CODE,
     Supervisor,
     request_reload,
@@ -55,7 +55,7 @@ def served(tmp_path: Path) -> Iterator[tuple[subprocess.Popen[bytes], Path]]:
         [
             sys.executable,
             "-m",
-            "agent_harness",
+            "tether",
             "serve",
             "--",
             sys.executable,
@@ -142,7 +142,7 @@ def test_command_resolves_from_project_venv(tmp_path: Path) -> None:
     )
     script.chmod(0o755)
     process = subprocess.Popen(
-        [sys.executable, "-m", "agent_harness", "serve", "--", "fake-server"],
+        [sys.executable, "-m", "tether", "serve", "--", "fake-server"],
         cwd=tmp_path,
         env={**os.environ, "CLAUDE_PROJECT_DIR": str(tmp_path)},
     )
