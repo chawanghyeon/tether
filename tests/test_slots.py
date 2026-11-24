@@ -104,7 +104,8 @@ def test_write_env_copies_main_env_with_slot_values(main_repo: Path) -> None:
 
     target = write_env(config, assign_slot(config))
 
-    values = parse_env((worktree / ".env").read_text())
+    assert target is not None
+    assert target == worktree / ".env"
     values = parse_env(target.read_text())
     assert values["SECRET"] == "abc"
     assert values["PORT"] == "8001"
