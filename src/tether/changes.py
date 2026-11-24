@@ -44,7 +44,7 @@ def _modified_after(path: Path, started_at: float) -> bool:
 
 
 def is_untracked(root: Path, path: str) -> bool:
-    output = _git_output(
+    output = git_output(
         root, "ls-files", "--others", "--exclude-standard", "--", path
     )
     return bool(output and output.strip())
@@ -53,7 +53,7 @@ def is_untracked(root: Path, path: str) -> bool:
 def added_lines(root: Path, path: str) -> set[int] | None:
     if is_untracked(root, path):
         return None
-    output = _git_output(root, "diff", "--unified=0", "HEAD", "--", path)
+    output = git_output(root, "diff", "--unified=0", "HEAD", "--", path)
     if output is None:
         return None
     lines: set[int] = set()
@@ -64,7 +64,7 @@ def added_lines(root: Path, path: str) -> set[int] | None:
     return lines
 
 
-def _git_output(root: Path, *args: str) -> str | None:
+def git_output(root: Path, *args: str) -> str | None:
     try:
         completed = subprocess.run(
             ("git", *args), cwd=root, capture_output=True, text=True
@@ -72,3 +72,11 @@ def _git_output(root: Path, *args: str) -> str | None:
     except FileNotFoundError:
         return None
     return completed.stdout if completed.returncode == 0 else None
+
+
+def snapshot_baseline(root: Path) -> str:
+    stash = git_output(root, "stash", "create")
+    if stash and stash.strip():
+        return stash.strip()
+    head = git_output(root, "rev-parse", "--verify", "HEAD")
+    return head.strip() if head else ""
