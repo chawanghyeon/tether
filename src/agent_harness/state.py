@@ -9,7 +9,6 @@ from pathlib import Path
 STATE_DIR = ".harness"
 TURN_FILE = "turn.json"
 LOCK_FILE = "turn.lock"
-SERVE_PID_FILE = "serve.pid"
 
 
 @dataclasses.dataclass
@@ -26,10 +25,6 @@ def state_dir(root: Path) -> Path:
     if not gitignore.exists():
         gitignore.write_text("*\n")
     return path
-
-
-def serve_pid_path(root: Path) -> Path:
-    return state_dir(root) / SERVE_PID_FILE
 
 
 @contextmanager
