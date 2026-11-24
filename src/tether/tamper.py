@@ -76,6 +76,7 @@ def turn_diff(
         "--unified=0",
         "--no-color",
         "--no-renames",
+        "--relative",
         baseline or "HEAD",
     )
     if output is None:

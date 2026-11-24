@@ -184,7 +184,7 @@ def _local_packages(config: Config) -> set[str]:
 
 
 def _old_text(root: Path, baseline: str, path: str) -> str | None:
-    return git_output(root, "show", f"{baseline or 'HEAD'}:{path}")
+    return git_output(root, "show", f"{baseline or 'HEAD'}:./{path}")
 
 
 def _read(path: Path) -> str | None:

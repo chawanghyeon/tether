@@ -129,3 +129,26 @@ def test_render_markdown_and_one_line() -> None:
 
 def test_render_markdown_without_changes() -> None:
     assert "No changes." in render_markdown([])
+
+
+def test_project_in_repo_subfolder(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "config", "user.name", "test")
+    project = tmp_path / "apps" / "shop"
+    write(
+        project, "src/orders.py", "RATE = 1\n\n\ndef total(x):\n    return x\n"
+    )
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "init")
+    baseline = snapshot_baseline(project)
+    write(
+        project, "src/orders.py", "RATE = 2\n\n\ndef total(x):\n    return x\n"
+    )
+
+    changes = changes_for(project, baseline, [])
+
+    assert [(c.path, c.status) for c in changes] == [
+        ("src/orders.py", "modified")
+    ]
+    assert (changes[0].added, changes[0].removed) == ((), ())

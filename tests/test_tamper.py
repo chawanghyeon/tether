@@ -141,3 +141,20 @@ def test_no_git_means_no_findings(tmp_path: Path) -> None:
 
     assert snapshot_baseline(tmp_path) == ""
     assert turn_diff(config, "", []) == []
+
+
+def test_project_in_repo_subfolder(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "config", "user.name", "test")
+    project = tmp_path / "apps" / "shop"
+    write(project, "tests/test_orders.py", ORIGINAL_TEST)
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "init")
+    baseline = snapshot_baseline(project)
+    (project / "tests/test_orders.py").unlink()
+    config = Config(root=project)
+
+    found = messages(config, turn_diff(config, baseline, []))
+
+    assert found == ["tests/test_orders.py: deleted a test file"]
