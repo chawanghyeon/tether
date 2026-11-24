@@ -25,6 +25,11 @@ class Config:
     stop_timeout_seconds: float = 60.0
     reload_globs: tuple[str, ...] = ("src/**/*.py",)
     max_report_chars: int = 4000
+    slot_env: dict[str, str] = dataclasses.field(default_factory=dict)
+    slot_env_file: str = ".env"
+    slot_setup: tuple[str, ...] = ()
+    slot_teardown: tuple[str, ...] = ()
+    max_slots: int = 50
 
 
 def find_root(start: Path) -> Path:
@@ -49,10 +54,7 @@ def _build(root: Path, table: dict[str, Any]) -> Config:
     unknown = sorted(set(table) - set(fields))
     if unknown:
         raise ConfigError(f"unknown [tool.tether] keys: {', '.join(unknown)}")
-    values: dict[str, Any] = {
-        name: tuple(value) if isinstance(value, list) else value
-        for name, value in table.items()
-    }
+    values = {name: _convert(name, value) for name, value in table.items()}
     config = Config(root=root, **values)
     if config.selection not in SELECTION_MODES:
         raise ConfigError(
@@ -60,3 +62,13 @@ def _build(root: Path, table: dict[str, Any]) -> Config:
             f"got {config.selection!r}"
         )
     return config
+
+
+def _convert(name: str, value: Any) -> Any:
+    if name == "slot_env":
+        if not isinstance(value, dict):
+            raise ConfigError("slot_env must be a table of strings")
+        return {str(key): str(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return tuple(value)
+    return value

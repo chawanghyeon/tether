@@ -26,6 +26,7 @@ from tether.hooks import (
     system_message,
 )
 from tether.outcome import Outcome
+from tether.slot_cli import SLOT_ACTIONS, slot_command
 from tether.state import load_turn, locked_turn, record_edit, reset_turn
 from tether.supervisor import Supervisor, request_reload, should_reload
 
@@ -166,6 +167,8 @@ def _dispatch(args: argparse.Namespace) -> Outcome:
         return check(config, args.full)
     if args.command == "reload":
         return reload(config)
+    if args.command == "slot":
+        return slot_command(config, args.action, args.force)
     server_command = _strip_separator(args.server_command)
     if not server_command:
         return Outcome(2, stderr="tether serve: missing command after --")
@@ -194,4 +197,13 @@ def _parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("server_command", nargs=argparse.REMAINDER)
     commands.add_parser("reload", help="restart the served dev server")
     commands.add_parser("hooks", help="print Claude Code hook settings")
+    slot_parser = commands.add_parser(
+        "slot", help="give this worktree its own ports, env, and databases"
+    )
+    slot_parser.add_argument(
+        "action", choices=SLOT_ACTIONS, nargs="?", default="show"
+    )
+    slot_parser.add_argument(
+        "--force", action="store_true", help="overwrite a hand-written env file"
+    )
     return parser

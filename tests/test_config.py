@@ -45,3 +45,26 @@ def test_find_root_walks_up_to_pyproject(tmp_path: Path) -> None:
     nested.mkdir(parents=True)
 
     assert find_root(nested) == tmp_path.resolve()
+
+
+def test_reads_slot_env_table(tmp_path: Path) -> None:
+    write_pyproject(
+        tmp_path,
+        "[tool.tether.slot_env]\n"
+        'PORT = "{8000 + slot}"\n'
+        'DATABASE_URL = "sqlite:///app_{slot}.db"\n',
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.slot_env == {
+        "PORT": "{8000 + slot}",
+        "DATABASE_URL": "sqlite:///app_{slot}.db",
+    }
+
+
+def test_rejects_non_table_slot_env(tmp_path: Path) -> None:
+    write_pyproject(tmp_path, '[tool.tether]\nslot_env = "PORT"\n')
+
+    with pytest.raises(ConfigError, match="slot_env"):
+        load_config(tmp_path)
