@@ -14,7 +14,7 @@ from tether.cli import (
     on_prompt,
     on_stop,
 )
-from tether.config import Config
+from tether.config import Config, ForbiddenPattern, ImportRule
 from tether.hooks import BLOCK_EXIT_CODE, HookInput
 from tether.state import load_turn, record_edit
 from tether.supervisor import RELOAD_REQUEST_FILE
@@ -192,3 +192,27 @@ def test_hook_entrypoint_end_to_end(project: Path) -> None:
 
     assert completed.returncode == BLOCK_EXIT_CODE
     assert "F401" in completed.stderr
+
+
+def test_on_edit_reports_guard_violation(project: Path) -> None:
+    write(project, "src/orders.py", "print('debug')\n")
+    rule = ForbiddenPattern(r"\bprint\(", "use logging", ("src/**/*.py",))
+    config = make_config(project, forbid=(rule,))
+
+    outcome = on_edit(config, edit_hook(project, "src/orders.py"))
+
+    assert outcome.exit_code == BLOCK_EXIT_CODE
+    assert "src/orders.py:1: [forbid] use logging" in outcome.stderr
+
+
+def test_on_stop_blocks_on_guard_violation(project: Path) -> None:
+    write(project, "src/orders.py", "import fastapi\n")
+    rule = ImportRule("src/**/*.py", ("fastapi",), "keep web out of core")
+    config = make_config(project, imports=(rule,))
+    record_edit(project, "src/orders.py")
+
+    outcome = on_stop(config, now=1.0)
+
+    assert outcome.exit_code == BLOCK_EXIT_CODE
+    assert "## guard failed" in outcome.stderr
+    assert "fastapi: keep web out of core" in outcome.stderr

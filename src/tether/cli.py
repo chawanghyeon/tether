@@ -12,9 +12,7 @@ from tether.checks import (
     Status,
     failed,
     format_report,
-    run_check,
     run_full_checks,
-    run_turn_checks,
     summarize,
 )
 from tether.config import Config, ConfigError, find_root, load_config
@@ -26,12 +24,11 @@ from tether.hooks import (
     system_message,
 )
 from tether.outcome import Outcome
+from tether.pipeline import edit_results, turn_results
 from tether.slot_cli import SLOT_ACTIONS, slot_command
 from tether.state import load_turn, locked_turn, record_edit, reset_turn
 from tether.supervisor import Supervisor, request_reload, should_reload
 
-EDIT_LINT_TIMEOUT_SECONDS = 10.0
-PYTHON_SUFFIX = ".py"
 PROJECT_DIR_ENV = "CLAUDE_PROJECT_DIR"
 STOP_HOOK_TIMEOUT_SECONDS = 180
 EDIT_TOOLS_MATCHER = "Edit|MultiEdit|Write|NotebookEdit"
@@ -49,28 +46,19 @@ def on_edit(config: Config, hook: HookInput) -> Outcome:
     if relative is None:
         return Outcome()
     record_edit(config.root, relative)
-    if not (
-        config.lint_on_edit
-        and relative.endswith(PYTHON_SUFFIX)
-        and (config.root / relative).is_file()
-    ):
+    if not (config.root / relative).is_file():
         return Outcome()
-    result = run_check(
-        "lint",
-        (*config.lint_command, relative),
-        config.root,
-        EDIT_LINT_TIMEOUT_SECONDS,
-    )
-    if result.status is not Status.FAILED:
+    results = edit_results(config, relative)
+    if not failed(results):
         return Outcome()
-    report = format_report([result], config.max_report_chars)
+    report = format_report(results, config.max_report_chars)
     return Outcome(BLOCK_EXIT_CODE, stderr=report)
 
 
 def on_stop(config: Config, now: float) -> Outcome:
     turn = load_turn(config.root)
     changed = changed_since(config.root, turn.started_at, turn.edited)
-    results = run_turn_checks(
+    results = turn_results(
         config, changed, Deadline.after(config.stop_timeout_seconds)
     )
     failures = failed(results)
@@ -102,7 +90,7 @@ def check(config: Config, full: bool) -> Outcome:
     else:
         turn = load_turn(config.root)
         changed = changed_since(config.root, turn.started_at, turn.edited)
-        results = run_turn_checks(config, changed, Deadline.after(None))
+        results = turn_results(config, changed, Deadline.after(None))
     report = format_report(results, config.max_report_chars)
     return Outcome(1 if failed(results) else 0, stdout=report)
 

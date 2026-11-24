@@ -1,4 +1,5 @@
 import dataclasses
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,20 @@ SELECTION_MODES = ("auto", "testmon", "path")
 
 class ConfigError(ValueError):
     pass
+
+
+@dataclasses.dataclass(frozen=True)
+class ForbiddenPattern:
+    pattern: str
+    message: str
+    paths: tuple[str, ...] = ("**/*.py",)
+
+
+@dataclasses.dataclass(frozen=True)
+class ImportRule:
+    source: str
+    forbid: tuple[str, ...]
+    message: str = "import crosses an architecture boundary"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -30,6 +45,13 @@ class Config:
     slot_setup: tuple[str, ...] = ()
     slot_teardown: tuple[str, ...] = ()
     max_slots: int = 50
+    layout: tuple[str, ...] = ()
+    forbid: tuple[ForbiddenPattern, ...] = ()
+    imports: tuple[ImportRule, ...] = ()
+
+    @property
+    def has_guard_rules(self) -> bool:
+        return bool(self.layout or self.forbid or self.imports)
 
 
 def find_root(start: Path) -> Path:
@@ -65,6 +87,10 @@ def _build(root: Path, table: dict[str, Any]) -> Config:
 
 
 def _convert(name: str, value: Any) -> Any:
+    if name == "forbid":
+        return tuple(_forbidden_pattern(item) for item in value)
+    if name == "imports":
+        return tuple(_rule(ImportRule, item, name) for item in value)
     if name == "slot_env":
         if not isinstance(value, dict):
             raise ConfigError("slot_env must be a table of strings")
@@ -72,3 +98,27 @@ def _convert(name: str, value: Any) -> Any:
     if isinstance(value, list):
         return tuple(value)
     return value
+
+
+def _forbidden_pattern(item: Any) -> ForbiddenPattern:
+    rule = _rule(ForbiddenPattern, item, "forbid")
+    try:
+        re.compile(rule.pattern)
+    except re.error as error:
+        message = f"bad forbid pattern {rule.pattern!r}: {error}"
+        raise ConfigError(message) from error
+    return rule
+
+
+def _rule[T](kind: type[T], item: Any, table: str) -> T:
+    if not isinstance(item, dict):
+        raise ConfigError(f"each [[tool.tether.{table}]] entry must be a table")
+    values = {
+        key: tuple(value) if isinstance(value, list) else value
+        for key, value in item.items()
+    }
+    try:
+        return kind(**values)
+    except TypeError as error:
+        message = f"bad [[tool.tether.{table}]] entry: {error}"
+        raise ConfigError(message) from error

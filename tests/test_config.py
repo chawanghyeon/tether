@@ -2,7 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from tether.config import Config, ConfigError, find_root, load_config
+from tether.config import (
+    Config,
+    ConfigError,
+    ForbiddenPattern,
+    ImportRule,
+    find_root,
+    load_config,
+)
 
 
 def write_pyproject(root: Path, body: str) -> None:
@@ -67,4 +74,40 @@ def test_rejects_non_table_slot_env(tmp_path: Path) -> None:
     write_pyproject(tmp_path, '[tool.tether]\nslot_env = "PORT"\n')
 
     with pytest.raises(ConfigError, match="slot_env"):
+        load_config(tmp_path)
+
+
+def test_reads_guard_rules(tmp_path: Path) -> None:
+    write_pyproject(
+        tmp_path,
+        '[tool.tether]\nlayout = ["src/**/*.py"]\n'
+        "[[tool.tether.forbid]]\n"
+        'pattern = "print\\\\("\nmessage = "use logging"\n'
+        "[[tool.tether.imports]]\n"
+        'source = "src/app/domain/**/*.py"\nforbid = ["app.api"]\n',
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.layout == ("src/**/*.py",)
+    assert config.forbid == (ForbiddenPattern("print\\(", "use logging"),)
+    assert config.imports == (
+        ImportRule("src/app/domain/**/*.py", ("app.api",)),
+    )
+    assert config.has_guard_rules
+
+
+def test_rejects_bad_forbid_regex(tmp_path: Path) -> None:
+    write_pyproject(
+        tmp_path, '[[tool.tether.forbid]]\npattern = "("\nmessage = "x"\n'
+    )
+
+    with pytest.raises(ConfigError, match="bad forbid pattern"):
+        load_config(tmp_path)
+
+
+def test_rejects_incomplete_import_rule(tmp_path: Path) -> None:
+    write_pyproject(tmp_path, '[[tool.tether.imports]]\nsource = "src"\n')
+
+    with pytest.raises(ConfigError, match="imports"):
         load_config(tmp_path)
