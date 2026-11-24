@@ -50,6 +50,7 @@ class Config:
     imports: tuple[ImportRule, ...] = ()
     verify_claims: bool = True
     tamper_blocks: bool = False
+    summary_on_stop: bool = True
 
     @property
     def has_guard_rules(self) -> bool:

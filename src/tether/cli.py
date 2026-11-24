@@ -6,7 +6,7 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from tether.changes import changed_since, snapshot_baseline
+from tether.changes import changed_since, git_changed, snapshot_baseline
 from tether.checks import (
     CheckResult,
     Deadline,
@@ -28,7 +28,19 @@ from tether.hooks import (
 from tether.outcome import Outcome
 from tether.pipeline import edit_results, turn_results
 from tether.slot_cli import SLOT_ACTIONS, slot_command
-from tether.state import load_turn, locked_turn, record_edit, reset_turn
+from tether.state import (
+    load_turn,
+    locked_turn,
+    record_edit,
+    reset_turn,
+    state_dir,
+)
+from tether.summary import (
+    one_line,
+    render_markdown,
+    summarize_changes,
+    write_summary,
+)
 from tether.supervisor import Supervisor, request_reload, should_reload
 from tether.tamper import find_tampering, turn_diff
 
@@ -70,12 +82,8 @@ def on_stop(config: Config, hook: HookInput, now: float) -> Outcome:
     )
     failures = failed(results)
     claims = _unsupported_claims(config, hook, turn.started_at, results)
-    findings = [
-        str(finding)
-        for finding in find_tampering(
-            config, turn_diff(config, turn.baseline, changed)
-        )
-    ]
+    diffs = turn_diff(config, turn.baseline, changed)
+    findings = [str(finding) for finding in find_tampering(config, diffs)]
     blocking_findings = findings if config.tamper_blocks else []
     if (failures or claims or blocking_findings) and (
         turn.attempts < config.max_stop_attempts
@@ -104,6 +112,10 @@ def on_stop(config: Config, hook: HookInput, now: float) -> Outcome:
         messages.append(_bullets(TAMPER_HEADING, findings))
     if any(result.status is Status.TIMED_OUT for result in results):
         messages.append("tether: checks timed out; run `tether check`")
+    if config.summary_on_stop and diffs:
+        changes = summarize_changes(config, turn.baseline, diffs)
+        write_summary(state_dir(config.root), changes)
+        messages.append(one_line(changes))
     if should_reload(changed, config.reload_globs) and request_reload(
         config.root
     ):
@@ -122,6 +134,19 @@ def check(config: Config, full: bool) -> Outcome:
         results = turn_results(config, changed, Deadline.after(None))
     report = format_report(results, config.max_report_chars)
     return Outcome(1 if failed(results) else 0, stdout=report)
+
+
+def summary(config: Config, since: str | None) -> Outcome:
+    if since is None:
+        turn = load_turn(config.root)
+        baseline = turn.baseline
+        changed = changed_since(config.root, turn.started_at, turn.edited)
+    else:
+        baseline = since
+        changed = git_changed(config.root) or []
+    diffs = turn_diff(config, baseline, changed)
+    changes = summarize_changes(config, baseline, diffs)
+    return Outcome(stdout=render_markdown(changes))
 
 
 def reload(config: Config) -> Outcome:
@@ -184,6 +209,8 @@ def _dispatch(args: argparse.Namespace) -> Outcome:
         return check(config, args.full)
     if args.command == "reload":
         return reload(config)
+    if args.command == "summary":
+        return summary(config, args.since)
     if args.command == "slot":
         return slot_command(config, args.action, args.force)
     server_command = _strip_separator(args.server_command)
@@ -231,6 +258,12 @@ def _parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("server_command", nargs=argparse.REMAINDER)
     commands.add_parser("reload", help="restart the served dev server")
     commands.add_parser("hooks", help="print Claude Code hook settings")
+    summary_parser = commands.add_parser(
+        "summary", help="show what changed, by module and symbol"
+    )
+    summary_parser.add_argument(
+        "--since", help="git ref to compare with (default: start of turn)"
+    )
     slot_parser = commands.add_parser(
         "slot", help="give this worktree its own ports, env, and databases"
     )

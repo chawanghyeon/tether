@@ -14,6 +14,7 @@ from tether.cli import (
     on_edit,
     on_prompt,
     on_stop,
+    summary,
 )
 from tether.config import Config, ForbiddenPattern, ImportRule
 from tether.hooks import BLOCK_EXIT_CODE, HookInput
@@ -303,3 +304,24 @@ def test_on_stop_can_block_on_tampering(git_project: Path) -> None:
 
     assert outcome.exit_code == BLOCK_EXIT_CODE
     assert "Undo these" in outcome.stderr
+
+
+def test_on_stop_writes_summary(git_project: Path) -> None:
+    config = make_config(git_project)
+    on_prompt(config, now=0.0)
+    write(git_project, "src/orders.py", "def refund(order_id):\n    pass\n")
+
+    outcome = on_stop(config, stop_hook(git_project), now=1.0)
+
+    message = json.loads(outcome.stdout)["systemMessage"]
+    assert "tether: 1 file(s) (+2 -0), 1 symbol(s) added" in message
+    summary_file = git_project / ".tether" / "summary.md"
+    assert "added: `refund(order_id)`" in summary_file.read_text()
+
+
+def test_summary_command_since_ref(git_project: Path) -> None:
+    write(git_project, "src/orders.py", "def refund(order_id):\n    pass\n")
+
+    outcome = summary(make_config(git_project), since="HEAD")
+
+    assert "`orders.py` modified" in outcome.stdout
