@@ -48,6 +48,8 @@ class Config:
     layout: tuple[str, ...] = ()
     forbid: tuple[ForbiddenPattern, ...] = ()
     imports: tuple[ImportRule, ...] = ()
+    verify_claims: bool = True
+    tamper_blocks: bool = False
 
     @property
     def has_guard_rules(self) -> bool:

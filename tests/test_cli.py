@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from tests.conftest import git
 from tether.cli import (
     check,
     hooks_settings,
@@ -40,6 +41,25 @@ def edit_hook(root: Path, relative: str) -> HookInput:
     )
 
 
+def stop_hook(root: Path, transcript: Path | None = None) -> HookInput:
+    return HookInput(event="Stop", cwd=root, transcript_path=transcript)
+
+
+def write_transcript(path: Path, final_text: str) -> Path:
+    entries = [
+        {"type": "user", "message": {"role": "user", "content": "go"}},
+        {
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": final_text}],
+            },
+        },
+    ]
+    path.write_text("\n".join(json.dumps(entry) for entry in entries))
+    return path
+
+
 def make_config(root: Path, **overrides: Any) -> Config:
     base = Config(
         root=root,
@@ -48,6 +68,18 @@ def make_config(root: Path, **overrides: Any) -> Config:
         test_command=PASS,
     )
     return dataclasses.replace(base, **overrides)
+
+
+@pytest.fixture
+def git_project(tmp_path: Path) -> Path:
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "config", "user.name", "test")
+    write(tmp_path, "src/orders.py")
+    write(tmp_path, "tests/test_orders.py", "def test_x():\n    assert 1\n")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "init")
+    return tmp_path
 
 
 @pytest.fixture
@@ -103,7 +135,7 @@ def test_on_edit_ignores_files_outside_project(project: Path) -> None:
 def test_on_stop_passes_and_resets_turn(project: Path) -> None:
     record_edit(project, "src/orders.py")
 
-    outcome = on_stop(make_config(project), now=99.0)
+    outcome = on_stop(make_config(project), stop_hook(project), now=99.0)
 
     assert outcome.exit_code == 0
     assert outcome.stdout == ""
@@ -115,9 +147,9 @@ def test_on_stop_blocks_until_attempts_run_out(project: Path) -> None:
     config = make_config(project, test_command=FAIL, max_stop_attempts=2)
     record_edit(project, "src/orders.py")
 
-    first = on_stop(config, now=1.0)
-    second = on_stop(config, now=2.0)
-    third = on_stop(config, now=3.0)
+    first = on_stop(config, stop_hook(project), now=1.0)
+    second = on_stop(config, stop_hook(project), now=2.0)
+    third = on_stop(config, stop_hook(project), now=3.0)
 
     assert first.exit_code == BLOCK_EXIT_CODE
     assert "## tests failed" in first.stderr
@@ -130,7 +162,7 @@ def test_on_stop_blocks_until_attempts_run_out(project: Path) -> None:
 def test_on_stop_with_nothing_changed(project: Path) -> None:
     config = make_config(project, test_command=FAIL)
 
-    assert on_stop(config, now=1.0).exit_code == 0
+    assert on_stop(config, stop_hook(project), now=1.0).exit_code == 0
 
 
 def test_on_stop_requests_reload_when_server_runs(
@@ -139,7 +171,7 @@ def test_on_stop_requests_reload_when_server_runs(
     monkeypatch.setattr(SERVE_RUNNING, lambda root: True)
     record_edit(project, "src/orders.py")
 
-    outcome = on_stop(make_config(project), now=1.0)
+    outcome = on_stop(make_config(project), stop_hook(project), now=1.0)
 
     assert (project / ".tether" / RELOAD_REQUEST_FILE).exists()
     assert "server reloaded" in json.loads(outcome.stdout)["systemMessage"]
@@ -151,7 +183,7 @@ def test_on_stop_skips_reload_for_test_only_changes(
     monkeypatch.setattr(SERVE_RUNNING, lambda root: True)
     record_edit(project, "tests/test_orders.py")
 
-    on_stop(make_config(project), now=1.0)
+    on_stop(make_config(project), stop_hook(project), now=1.0)
 
     assert not (project / ".tether" / RELOAD_REQUEST_FILE).exists()
 
@@ -211,8 +243,63 @@ def test_on_stop_blocks_on_guard_violation(project: Path) -> None:
     config = make_config(project, imports=(rule,))
     record_edit(project, "src/orders.py")
 
-    outcome = on_stop(config, now=1.0)
+    outcome = on_stop(config, stop_hook(project), now=1.0)
 
     assert outcome.exit_code == BLOCK_EXIT_CODE
     assert "## guard failed" in outcome.stderr
     assert "fastapi: keep web out of core" in outcome.stderr
+
+
+def test_on_stop_blocks_unsupported_claim(project: Path) -> None:
+    transcript = write_transcript(project / "t.jsonl", "Done, lint is clean.")
+    config = make_config(project, lint_command=("no-such-linter",))
+    record_edit(project, "src/orders.py")
+
+    outcome = on_stop(config, stop_hook(project, transcript), now=1.0)
+
+    assert outcome.exit_code == BLOCK_EXIT_CODE
+    assert "tether: unsupported claims" in outcome.stderr
+    assert "'lint passes'" in outcome.stderr
+
+
+def test_on_stop_accepts_claim_backed_by_checks(project: Path) -> None:
+    transcript = write_transcript(project / "t.jsonl", "All tests pass.")
+    record_edit(project, "src/orders.py")
+
+    outcome = on_stop(make_config(project), stop_hook(project, transcript), 1.0)
+
+    assert outcome.exit_code == 0
+
+
+def test_on_stop_claim_check_can_be_disabled(project: Path) -> None:
+    transcript = write_transcript(project / "t.jsonl", "lint is clean")
+    config = make_config(
+        project, lint_command=("no-such-linter",), verify_claims=False
+    )
+    record_edit(project, "src/orders.py")
+
+    assert on_stop(config, stop_hook(project, transcript), 1.0).exit_code == 0
+
+
+def test_on_stop_warns_about_tampering(git_project: Path) -> None:
+    config = make_config(git_project)
+    on_prompt(config, now=0.0)
+    write(git_project, "tests/test_orders.py", "")
+
+    outcome = on_stop(config, stop_hook(git_project), now=1.0)
+
+    assert outcome.exit_code == 0
+    message = json.loads(outcome.stdout)["systemMessage"]
+    assert "tether: edits to review" in message
+    assert "removed 1 assertion(s)" in message
+
+
+def test_on_stop_can_block_on_tampering(git_project: Path) -> None:
+    config = make_config(git_project, tamper_blocks=True)
+    on_prompt(config, now=0.0)
+    write(git_project, "tests/test_orders.py", "")
+
+    outcome = on_stop(config, stop_hook(git_project), now=1.0)
+
+    assert outcome.exit_code == BLOCK_EXIT_CODE
+    assert "Undo these" in outcome.stderr

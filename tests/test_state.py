@@ -40,3 +40,9 @@ def test_corrupt_state_is_treated_as_empty(tmp_path: Path) -> None:
 
 def test_state_dir_ignores_itself_in_git(tmp_path: Path) -> None:
     assert (state_dir(tmp_path) / ".gitignore").read_text() == "*\n"
+
+
+def test_reset_turn_stores_baseline(tmp_path: Path) -> None:
+    reset_turn(tmp_path, now=1.0, baseline="abc123")
+
+    assert load_turn(tmp_path).baseline == "abc123"

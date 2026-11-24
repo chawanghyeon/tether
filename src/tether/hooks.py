@@ -14,6 +14,7 @@ class HookInput:
     tool_name: str | None = None
     file_path: Path | None = None
     stop_hook_active: bool = False
+    transcript_path: Path | None = None
 
 
 def parse_hook_input(stream: TextIO, fallback_cwd: Path) -> HookInput:
@@ -27,6 +28,7 @@ def parse_hook_input(stream: TextIO, fallback_cwd: Path) -> HookInput:
         tool_name=raw.get("tool_name"),
         file_path=_file_path(tool_input, cwd),
         stop_hook_active=bool(raw.get("stop_hook_active", False)),
+        transcript_path=_optional_path(raw.get("transcript_path")),
     )
 
 
@@ -48,3 +50,7 @@ def _file_path(tool_input: dict[str, Any], cwd: Path) -> Path | None:
             path = Path(value)
             return path if path.is_absolute() else cwd / path
     return None
+
+
+def _optional_path(value: Any) -> Path | None:
+    return Path(value).expanduser() if value else None

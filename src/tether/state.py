@@ -16,6 +16,7 @@ class TurnState:
     started_at: float = 0.0
     edited: list[str] = dataclasses.field(default_factory=list)
     attempts: int = 0
+    baseline: str = ""
 
 
 def state_dir(root: Path) -> Path:
@@ -41,11 +42,12 @@ def load_turn(root: Path) -> TurnState:
     return _read(state_dir(root) / TURN_FILE)
 
 
-def reset_turn(root: Path, now: float) -> None:
+def reset_turn(root: Path, now: float, baseline: str = "") -> None:
     with locked_turn(root) as state:
         state.started_at = now
         state.edited.clear()
         state.attempts = 0
+        state.baseline = baseline
 
 
 def record_edit(root: Path, relative_path: str) -> None:
@@ -63,6 +65,7 @@ def _read(path: Path) -> TurnState:
         started_at=float(raw.get("started_at", 0.0)),
         edited=[str(item) for item in raw.get("edited", [])],
         attempts=int(raw.get("attempts", 0)),
+        baseline=str(raw.get("baseline", "")),
     )
 
 

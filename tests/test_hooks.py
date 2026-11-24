@@ -59,3 +59,11 @@ def test_empty_input_is_allowed(tmp_path: Path) -> None:
 def test_relative_to_root(tmp_path: Path) -> None:
     assert relative_to_root(tmp_path / "src/a.py", tmp_path) == "src/a.py"
     assert relative_to_root(Path("/outside/a.py"), tmp_path) is None
+
+
+def test_parses_transcript_path(tmp_path: Path) -> None:
+    hook = parse_hook_input(
+        io.StringIO(json.dumps({"transcript_path": "~/t.jsonl"})), tmp_path
+    )
+
+    assert hook.transcript_path == Path("~/t.jsonl").expanduser()
