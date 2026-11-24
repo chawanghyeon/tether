@@ -1,3 +1,4 @@
+import re
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
@@ -10,6 +11,7 @@ GIT_CHANGED_COMMAND = (
     "--exclude-standard",
     "-z",
 )
+HUNK_HEADER = re.compile(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
 def git_changed(root: Path) -> list[str] | None:
@@ -39,3 +41,34 @@ def _modified_after(path: Path, started_at: float) -> bool:
         return path.stat().st_mtime >= started_at
     except FileNotFoundError:
         return False
+
+
+def is_untracked(root: Path, path: str) -> bool:
+    output = _git_output(
+        root, "ls-files", "--others", "--exclude-standard", "--", path
+    )
+    return bool(output and output.strip())
+
+
+def added_lines(root: Path, path: str) -> set[int] | None:
+    if is_untracked(root, path):
+        return None
+    output = _git_output(root, "diff", "--unified=0", "HEAD", "--", path)
+    if output is None:
+        return None
+    lines: set[int] = set()
+    for match in HUNK_HEADER.finditer(output):
+        start = int(match.group(1))
+        count = int(match.group(2) or 1)
+        lines.update(range(start, start + count))
+    return lines
+
+
+def _git_output(root: Path, *args: str) -> str | None:
+    try:
+        completed = subprocess.run(
+            ("git", *args), cwd=root, capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return None
+    return completed.stdout if completed.returncode == 0 else None

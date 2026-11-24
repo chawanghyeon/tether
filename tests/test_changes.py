@@ -2,7 +2,12 @@ import os
 import subprocess
 from pathlib import Path
 
-from tether.changes import changed_since, git_changed
+from tether.changes import (
+    added_lines,
+    changed_since,
+    git_changed,
+    is_untracked,
+)
 
 
 def git(root: Path, *args: str) -> None:
@@ -45,3 +50,38 @@ def test_changed_since_filters_by_turn_start(tmp_path: Path) -> None:
 
 def test_changed_since_includes_recorded_edits(tmp_path: Path) -> None:
     assert changed_since(tmp_path, 0, ["src/a.py"]) == ["src/a.py"]
+
+
+def test_added_lines_for_tracked_file(tmp_path: Path) -> None:
+    make_repo(tmp_path)
+    (tmp_path / "old.py").write_text("a = 1\nb = 2\nc = 3\n")
+
+    assert added_lines(tmp_path, "old.py") == {2, 3}
+
+
+def test_added_lines_for_changed_line(tmp_path: Path) -> None:
+    make_repo(tmp_path)
+    (tmp_path / "old.py").write_text("a = 9\n")
+
+    assert added_lines(tmp_path, "old.py") == {1}
+
+
+def test_added_lines_for_untracked_file_is_everything(tmp_path: Path) -> None:
+    make_repo(tmp_path)
+    (tmp_path / "new.py").write_text("x = 1\n")
+
+    assert is_untracked(tmp_path, "new.py")
+    assert added_lines(tmp_path, "new.py") is None
+
+
+def test_added_lines_without_git_is_everything(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("x = 1\n")
+
+    assert not is_untracked(tmp_path, "a.py")
+    assert added_lines(tmp_path, "a.py") is None
+
+
+def test_unchanged_file_has_no_added_lines(tmp_path: Path) -> None:
+    make_repo(tmp_path)
+
+    assert added_lines(tmp_path, "old.py") == set()
