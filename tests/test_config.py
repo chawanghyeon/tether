@@ -111,3 +111,14 @@ def test_rejects_incomplete_import_rule(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigError, match="imports"):
         load_config(tmp_path)
+
+
+def test_stop_mode_defaults_to_background(tmp_path: Path) -> None:
+    assert load_config(tmp_path).stop_mode == "background"
+
+
+def test_rejects_bad_stop_mode(tmp_path: Path) -> None:
+    write_pyproject(tmp_path, '[tool.tether]\nstop_mode = "later"\n')
+
+    with pytest.raises(ConfigError, match="stop_mode"):
+        load_config(tmp_path)

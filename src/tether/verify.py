@@ -70,13 +70,15 @@ class TurnReport:
             )
         return "\n\n".join(sections)
 
-    def user_messages(self, attempts: int) -> list[str]:
+    def user_messages(self, attempts: int | None) -> list[str]:
         messages = []
         if failed(self.results):
-            messages.append(
-                f"tether: still failing after {attempts} fix attempts. "
-                + summarize(self.results)
+            lead = (
+                "tether: checks failed. "
+                if attempts is None
+                else f"tether: still failing after {attempts} fix attempts. "
             )
+            messages.append(lead + summarize(self.results))
         if self.claims:
             messages.append(_bullets(CLAIMS_HEADING, self.claims))
         if self.findings:

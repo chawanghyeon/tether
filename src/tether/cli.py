@@ -21,6 +21,13 @@ from tether.hooks import (
     relative_to_root,
     system_message,
 )
+from tether.jobs import (
+    job_running,
+    latest_result,
+    run_job,
+    start_job,
+    take_result,
+)
 from tether.outcome import Outcome
 from tether.pipeline import edit_results, turn_results
 from tether.slot_cli import SLOT_ACTIONS, slot_command
@@ -39,13 +46,16 @@ from tether.tamper import turn_diff
 from tether.verify import TurnSnapshot, verify_turn
 
 PROJECT_DIR_ENV = "CLAUDE_PROJECT_DIR"
-STOP_HOOK_TIMEOUT_SECONDS = 180
+STOP_HOOK_TIMEOUT_SECONDS = 120
 EDIT_TOOLS_MATCHER = "Edit|MultiEdit|Write|NotebookEdit"
 
 
 def on_prompt(config: Config, now: float) -> Outcome:
     reset_turn(config.root, now, snapshot_baseline(config.root))
-    return Outcome()
+    pending = take_result(config.root)
+    if pending is None or not pending.problems:
+        return Outcome()
+    return Outcome(stdout=pending.delivery())
 
 
 def on_edit(config: Config, hook: HookInput) -> Outcome:
@@ -58,15 +68,22 @@ def on_edit(config: Config, hook: HookInput) -> Outcome:
     if not (config.root / relative).is_file():
         return Outcome()
     results = edit_results(config, relative)
-    if not failed(results):
+    sections = []
+    pending = take_result(config.root)
+    if pending is not None and pending.problems:
+        sections.append(pending.delivery())
+    if failed(results):
+        sections.append(format_report(results, config.max_report_chars))
+    if not sections:
         return Outcome()
-    report = format_report(results, config.max_report_chars)
-    return Outcome(BLOCK_EXIT_CODE, stderr=report)
+    return Outcome(BLOCK_EXIT_CODE, stderr="\n\n".join(sections))
 
 
 def on_stop(config: Config, hook: HookInput, now: float) -> Outcome:
     turn = load_turn(config.root)
     snapshot = TurnSnapshot.of(turn, hook.transcript_path)
+    if config.stop_mode == "background":
+        return _stop_in_background(config, snapshot, now)
     report = verify_turn(
         config, snapshot, Deadline.after(config.stop_timeout_seconds)
     )
@@ -82,6 +99,35 @@ def on_stop(config: Config, hook: HookInput, now: float) -> Outcome:
     reset_turn(config.root, now, snapshot_baseline(config.root))
     stdout = system_message("\n".join(messages)) if messages else ""
     return Outcome(stdout=stdout)
+
+
+def _stop_in_background(
+    config: Config, snapshot: TurnSnapshot, now: float
+) -> Outcome:
+    changed = changed_since(config.root, snapshot.started_at, snapshot.edited)
+    if changed:
+        start_job(config, snapshot)
+    messages = []
+    if should_reload(changed, config.reload_globs) and request_reload(
+        config.root
+    ):
+        messages.append("tether: server reloaded")
+    reset_turn(config.root, now, snapshot_baseline(config.root))
+    stdout = system_message("\n".join(messages)) if messages else ""
+    return Outcome(stdout=stdout)
+
+
+def status(config: Config) -> Outcome:
+    lines = ["tether: checks running" if job_running(config.root) else ""]
+    result = latest_result(config.root)
+    if result is None:
+        lines.append("tether: no background results yet")
+    else:
+        verdict = "problems found" if result.problems else "all clear"
+        lines.append(f"tether: last background check: {verdict}")
+        if result.user_message:
+            lines.append(result.user_message)
+    return Outcome(stdout="\n".join(line for line in lines if line))
 
 
 def check(config: Config, full: bool) -> Outcome:
@@ -168,6 +214,10 @@ def _dispatch(args: argparse.Namespace) -> Outcome:
         return check(config, args.full)
     if args.command == "reload":
         return reload(config)
+    if args.command == "run-job":
+        return Outcome(run_job(config))
+    if args.command == "status":
+        return status(config)
     if args.command == "summary":
         return summary(config, args.since)
     if args.command == "slot":
@@ -200,6 +250,8 @@ def _parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("server_command", nargs=argparse.REMAINDER)
     commands.add_parser("reload", help="restart the served dev server")
     commands.add_parser("hooks", help="print Claude Code hook settings")
+    commands.add_parser("status", help="show background check results")
+    commands.add_parser("run-job", help=argparse.SUPPRESS)
     summary_parser = commands.add_parser(
         "summary", help="show what changed, by module and symbol"
     )

@@ -6,6 +6,7 @@ from typing import Any
 
 PYPROJECT = "pyproject.toml"
 SELECTION_MODES = ("auto", "testmon", "path")
+STOP_MODES = ("background", "blocking")
 
 
 class ConfigError(ValueError):
@@ -51,6 +52,8 @@ class Config:
     verify_claims: bool = True
     tamper_blocks: bool = False
     summary_on_stop: bool = True
+    stop_mode: str = "background"
+    background_timeout_seconds: float = 600.0
 
     @property
     def has_guard_rules(self) -> bool:
@@ -81,6 +84,10 @@ def _build(root: Path, table: dict[str, Any]) -> Config:
         raise ConfigError(f"unknown [tool.tether] keys: {', '.join(unknown)}")
     values = {name: _convert(name, value) for name, value in table.items()}
     config = Config(root=root, **values)
+    if config.stop_mode not in STOP_MODES:
+        raise ConfigError(
+            f"stop_mode must be one of {STOP_MODES}, got {config.stop_mode!r}"
+        )
     if config.selection not in SELECTION_MODES:
         raise ConfigError(
             f"selection must be one of {SELECTION_MODES}, "

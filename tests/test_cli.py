@@ -67,6 +67,7 @@ def make_config(root: Path, **overrides: Any) -> Config:
         lint_command=PASS,
         typecheck_command=PASS,
         test_command=PASS,
+        stop_mode="blocking",
     )
     return dataclasses.replace(base, **overrides)
 
