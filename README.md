@@ -42,11 +42,21 @@ tether hooks
 |---|---|---|
 | UserPromptSubmit | `tether on-prompt` | Starts a turn and snapshots the working tree |
 | PostToolUse (edits) | `tether on-edit` | Records the file; runs guard rules and lint on it |
-| Stop | `tether on-stop` | Runs turn checks, claim and tamper checks, writes the summary, reloads the server |
+| Stop | `tether on-stop` | Starts turn checks in the background, reloads the server, and returns at once |
 
-When `on-edit` or `on-stop` finds a problem, it exits with code 2 and the
-agent gets a short report to fix. `on-stop` gives up after
-`max_stop_attempts` and tells you instead.
+**You never wait on checks.** By default (`stop_mode = "background"`), the
+Stop hook returns in well under a second and the turn checks run in a
+detached job. If the job finds problems, the agent gets the report once,
+at the start of your next prompt or on its next edit, and fixes them as part
+of that work. A newer turn's job replaces one that is still running.
+`tether status` shows the latest result.
+
+Set `stop_mode = "blocking"` to run the checks inside the Stop hook instead.
+Then a problem keeps the agent working (exit code 2) until it is fixed or
+`max_stop_attempts` runs out.
+
+When `on-edit` finds a problem in the edited file, it exits with code 2 and
+the agent gets a short report right away. These checks take milliseconds.
 
 ## Checks per turn
 
@@ -60,7 +70,8 @@ git changes made since the turn started, which catches shell edits) and runs:
    `tests/**/test_orders.py` and `tests/**/orders_test.py`; a changed
    `conftest.py` selects the tests next to it).
 
-Everything runs within `stop_timeout_seconds`. Run the whole suite by hand:
+Background jobs stop after `background_timeout_seconds`; blocking runs stop
+after `stop_timeout_seconds`. Run the whole suite by hand:
 
 ```bash
 tether check --full
@@ -187,6 +198,8 @@ layout = []
 verify_claims = true
 tamper_blocks = false
 summary_on_stop = true
+stop_mode = "background"      # or "blocking"
+background_timeout_seconds = 600
 ```
 
 ## Demo
@@ -203,8 +216,8 @@ PYTHONPATH=src tether serve -- python3 -m demo_app.server
 ## Development
 
 ```bash
-uv run pytest
-uv run ruff check
-uv run ruff format --check
-uv run pyright
+scripts/verify.sh
 ```
+
+It runs ruff, the format check, pyright, and pytest, and stops at the first
+failure.
